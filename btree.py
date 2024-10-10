@@ -38,37 +38,20 @@ class BTree:
         y = x.children[i]
         z = Node(y.leaf)
 
-        x.children.insert(i + 1, z)
+        ## 가운데 값을 부모로 올리기
+        x.children.insert(i + 1, z)   # 리스트 사용으로 뒤에 넣어야(i+1)
         x.keys.insert(i, y.keys[t - 1])
 
+        ## 슬라이싱 사용, t부터 끝까지, t-1까지(t-1 미포함)
         z.keys = y.keys[t:]
         y.keys = y.keys[:t - 1]
 
+        ## leaf가 아닐 때, leaf일 때는 children이 없음
         if not y.leaf:
             z.children = y.children[t:]
             y.children = y.children[:t]
         
-        # ## 슬라이싱 사용, t부터 끝까지, t-1까지(t-1 미포함)
-        # z.keys = y.keys[t:]
-        # y.keys = y.keys[:t-1]
-
-        # if not y.leaf:
-        #     z.children = y.children[t:]
-        #     y.children = y.children[:t]
-
-        # ## 가운데 값을 부모로 올리기
-        # x.keys.insert(i, y.keys[t - 1])
-        # x.children.insert(i + 1, z)
-
-        # ## 부모 업데이트
-        # z.parent = x
-        # for child in z.children:
-        #     child.parent = z
-
-
         
-
-
 
     # B-Tree-Insert
     def insert(self, k):
@@ -82,7 +65,7 @@ class BTree:
         root = self.root
 
         # Case 1: if the root is full
-        if len(root.keys) == 2*self.t - 1:
+        if len(root.keys) == 2 * self.t - 1:
             new_root = Node()
             self.root = new_root
             new_root.children.append(root)
@@ -118,7 +101,7 @@ class BTree:
                 i -= 1
             i += 1
             ## Disk-Read(x.c[i])
-            if len(x.children[i].keys) == (2 * self.t) - 1:
+            if len(x.children[i].keys) == 2 * self.t - 1:
                 self.split_child(x, i)
                 if k > x.keys[i]:
                     i += 1
