@@ -9,7 +9,7 @@ from tqdm import tqdm
 class Node:
     def __init__(self, leaf=False):
         self.keys = []
-        self.parent = []
+        self.parent = None
         self.children = []
         self.leaf = leaf
 
@@ -50,8 +50,15 @@ class BTree:
         if not y.leaf:
             z.children = y.children[t:]
             y.children = y.children[:t]
+
+        ## parent 업데이트
+            for child in z.children:
+                child.parent = z
+        z.parent = x
+        y.parent = x
         
         
+
 
     # B-Tree-Insert
     def insert(self, k):
@@ -61,14 +68,17 @@ class BTree:
         '''
         # (TODO)
         # Write your own code here 
-
         root = self.root
+        # if isinstance(k[0], str):   ## test code에 작은 수를 넣었더니 key  value통으로 str로 들어와서
+        #     data = k[0].split()     ## 왜인지 모르겠지만 혼자만든 테스트 파일에 문제가 있는 것 같음  
+        #     k = [int(data[0]), int(data[1])]          
 
         # Case 1: if the root is full
         if len(root.keys) == 2 * self.t - 1:
             new_root = Node()
             self.root = new_root
             new_root.children.append(root)
+            root.parent = new_root
             self.split_child(new_root, 0)
             self.insert_key(new_root, k)
         # Case 2: if the root is not full
@@ -85,25 +95,25 @@ class BTree:
         '''
         # (TODO)
         # Write your own code here 
-        # Case 1: if the node x is leaf
+        # Case 1: x가 leaf 노드일 때
         i = len(x.keys) - 1  ## i = x.n
         if x.leaf:
             x.keys.append(None)
-            while i >= 0 and k < x.keys[i]:
+            while i >= 0 and k[0] < x.keys[i][0]:
                 x.keys[i + 1] = x.keys[i]
                 i -= 1
             x.keys[i + 1] = k
-            ## Disk-Write(x)
+            # Disk-Write(x)
 
-        # Case 2: if the node x is an internal node
+        # Case 2: x가 internal 노드일 때
         else:
-            while i >= 0 and k < x.keys[i]:
+            while i >= 0 and k[0] < x.keys[i][0]:
                 i -= 1
             i += 1
             ## Disk-Read(x.c[i])
             if len(x.children[i].keys) == 2 * self.t - 1:
                 self.split_child(x, i)
-                if k > x.keys[i]:
+                if k[0] > x.keys[i][0]:
                     i += 1
             self.insert_key(x.children[i], k)
 
@@ -115,17 +125,21 @@ class BTree:
         # return: the node x that contains the key, the index of the key if the key is in the B-tree
         '''
         # (TODO)
-        # Write your own code here 
+        # Write your own code here
+        if x is None:
+            return None, None
+        
         i = 0
-        while i < len(x.keys) and key > x.keys[i]:
-            i += 1
-
-        if i < len(x.keys) and key == x.keys[i]:
+        while i < len(x.keys) and key > x.keys[i][0]:   ## key값이 더 클 때
+               i += 1
+        
+        if i < len(x.keys) and key == x.keys[i][0]:   ## 노드에 key가 있을 때
             return x, i
-        elif x.leaf:
-            return None
-        else:
-            return self.search_key(x.children[i], key)
+        elif x.leaf:   ## key가 없고 leaf 노드일 때
+            return None, None
+        else:   ## key가 없고 internal 노드일 때, 다음 자식 노드로 이동
+            if i < len(x.children):
+                return self.search_key(x.children[i], key)
 
 
 
@@ -136,10 +150,9 @@ class BTree:
         '''
         # (TODO)
         # Write your own code here 
-        result = self.search_key(self.root, k[0])
-        if result:
-            node, i = result
-
+        
+        node, i = self.search_key(self.root, k)
+        if node is not None:
             ## Case 1: key가 leaf 노드에 있을 때
             if node.leaf:
                 self.delete_leaf_node(node, i)
@@ -152,8 +165,6 @@ class BTree:
             if len(self.root.keys) == 0 and not self.root.leaf:
                 self.root = self.root.children[0]
                 self.root.parent = None
-        else:
-            pass
 
         
 
@@ -163,6 +174,7 @@ class BTree:
         '''
         # (TODO)
         # Write your own code here 
+        ## x는 leaf 노드, i는 leaf 노드에 있는 key index
         ## Case 1-1: 노드에 key가 t-1개보다 많을 때
         if len(x.keys) > self.t - 1:
             x.keys.pop(i)
@@ -170,70 +182,56 @@ class BTree:
         ## Case 1-2: 노드에 key가 t-1개일 때
         else:
             ## root가 leaf고 여기에 있는 값 제거할 때
-            parent = x.parent 
+            parent = x.parent
             if parent is None:
-                if len(x.keys) == 1:
-                    x.keys.pop(i)
-                    return
+                x.keys.pop(i)
+                return
+            
             parent_index = parent.children.index(x)
-            is_left = False
 
         ## Case 1-2a: sibling이 key가 t개 이상일 때
             ## 왼쪽 sibling이 존재하고, 왼쪽 sibling이 key가 t개 이상일 때
             if parent_index > 0 and len(parent.children[parent_index - 1].keys) > self.t - 1:
-                is_left = True
-                self.borrow_sibling(x, i, is_left)
+                self.borrow_sibling(x, i, True)
             ## 오른쪽 sibling이 존재하고, 오른쪽 sibling이 key가 t개 이상일 때
             elif parent_index < len(parent.children) - 1 and len(parent.children[parent_index + 1].keys) > self.t - 1:
-                is_left = False
-                self.borrow_sibling(x, i, is_left)
+                self.borrow_sibling(x, i, False)
             
-        ## Case 1-2b: 양쪽 sibling 모두 key가 t-1개일 때
+        ## Case 1-2b: 양쪽 sibling 모두 key가 t-1개일 때, 모두 leaf
             else:
-                ## 왼쪽 sibling이랑 부모에 빌려온 key를 합칠 때 
+                ## 왼쪽 sibling이랑 부모에 빌려온 key를 합칠 때
                 if parent_index > 0:
-                    ## key 제거하고 부모에 있는 key를 빌려오기
-                    x.keys.insert(0, parent.keys[parent_index - 1])
-                    x.keys.pop(i + 1)
-                    ## 왼쪽 sibling과 합치기
                     left_sibling = parent.children[parent_index - 1]
-                    x.keys = left_sibling.keys + x.keys
-                    x.children = left_sibling.children + x.children
-                    parent.children.pop(parent_index - 1)
+                    x.keys.pop(i)   # key 제거
+                    left_sibling.keys.append(parent.keys[parent_index - 1])   # 부모의 key를 왼쪽 형제에 추가
+                    left_sibling.keys.extend(x.keys)   # 노드의 key를 왼쪽 형제에 추가
 
-                    ## 제거 후 root가 비어있을 때, 높이 줄이기
-                    if self.root == parent and len(parent.children) == 1:
-                        parent.keys.pop(parent_index - 1)
-                        self.root = x
-                        self.root.parent = None
-                        return
+                    parent.children.pop(parent_index)   # 부모에서 노드 제거
+                    parent.keys.pop(parent_index - 1)   # 부모에서 key 제거
+                    x.parent = None
 
-                    ## 부모에 남은 key 제거, 재귀적으로 다시 부모에서 1-2a, 1-2b 확인
-                    self.delete_leaf_node(parent, parent_index - 1)
-                
                 ## 왼쪽 sibling이 없을 때
                 else: 
-                    ## key 제거하고 부모에 있는 key를 빌려오기
-                    x.keys.append(parent.keys[parent_index + 1])
-                    x.keys.pop(i)
-                    ## 오른쪽 sibling과 합치기
                     right_sibling = parent.children[parent_index + 1]
-                    right_sibling.keys = x.keys + right_sibling.keys
-                    right_sibling.children = x.children + right_sibling.children
-                    parent.children.pop(parent_index)
+                    x.keys.pop(i)
+                    x.keys.append(parent.keys[parent_index])
+                    x.keys.extend(right_sibling.keys)
 
-                    ## 제거 후 root가 비어있을 때, 높이 줄이기
-                    if self.root == parent and len(parent.children) == 1:
-                        parent.keys.pop(parent_index)
-                        self.root = right_sibling
-                        self.root.parent = None
-                        return
+                    parent.children.pop(parent_index + 1)
+                    parent.keys.pop(parent_index)
+                    right_sibling.parent = None
 
-                    ## 부모에 남은 key 제거, 재귀적으로 다시 부모에서 1-2a, 1-2b 확인
-                    self.delete_leaf_node(parent, parent_index)
-
-
-            
+                ## 1-2b 제거 후 root가 비어있을 때, 높이 줄이기
+                if parent == self.root and len(parent.keys) == 0:
+                    if parent_index > 0:
+                        self.root = left_sibling
+                    else:
+                        self.root = x
+                    self.root.parent = None
+                ## 여기서는 p20처럼 1-2b처럼 부모에 빌려와서 옆 노드랑 병합만
+                elif len(parent.keys) < self.t - 1:
+                    self.check_smaller_than_t(parent)
+                    
 
 
     def delete_internal_node(self, x, i):
@@ -241,49 +239,92 @@ class BTree:
         # delete the key in an internal node
         '''
         # (TODO)
-        # Write your own code here 
-        predecessor = self.find_predecessor(x.children[i])
+        # Write your own code here
+        predecessor = self.find_predecessor(x.children[i])   ## leaf가 아니면 무조건 있다
         x.keys[i], predecessor.keys[-1] = predecessor.keys[-1], x.keys[i]
-        self.delete_leaf_node(predecessor, len(predecessor.keys) - 1)
+        self.delete_leaf_node(predecessor, -1)
 
 
 
     # implement whatever you need 
     def borrow_merge(self, x, j):
         pass
-
+        
     def check_smaller_than_t(self, x):
-        pass
+
+        parent = x.parent
+        if parent is None:
+            return
+        
+        parent_index = parent.children.index(x)
+
+        if parent_index > 0:
+            left_sibling = parent.children[parent_index - 1]
+            left_sibling.keys.append(parent.keys[parent_index - 1])
+            left_sibling.keys.extend(x.keys) 
+            parent.children.pop(parent_index)
+            parent.keys.pop(parent_index - 1)
+            x.parent = None
+            
+            ## 여기는 leaf가 아니라서 children 병합해줘야 함
+            left_sibling.children.extend(x.children)
+            for child in x.children:
+                child.parent = left_sibling
+            x.children.clear()
+
+        else:
+            right_sibling = parent.children[parent_index + 1]
+            x.keys.append(parent.keys[parent_index])
+            x.keys.extend(right_sibling.keys)
+            parent.children.pop(parent_index + 1)
+            parent.keys.pop(parent_index)
+            right_sibling.parent = None
+
+            ## 여기는 leaf가 아니라서 children 병합해줘야 함
+            x.children.extend(right_sibling.children)
+            for child in right_sibling.children:
+                child.parent = x
+            right_sibling.children.clear()
+
+        if parent == self.root and len(parent.keys) == 0:
+            if parent_index > 0:
+                self.root = left_sibling
+            else:
+                self.root = x
+            self.root.parent = None
+        elif len(parent.keys) < self.t - 1:
+            self.check_smaller_than_t(parent)
+        
+        
 
     def find_predecessor(self, x):
         ## 여기서 x는 제거할 노트의 왼쪽 자식 노드
         current = x
         while not current.leaf:
             current = current.children[-1]
-        return current.children[-1]
+        return current
         
     def merge_sibling(self, x, i, j):
         pass
 
-    def borrow_sibling(self, x, i, j):
+    def borrow_sibling(self, x, i, is_left):
         ## i: key index, j: is_left
         parent = x.parent
         parent_index = parent.children.index(x)
 
         ## 왼쪽 sibling이 존재하고, 왼쪽 sibling이 key가 t개 이상일 때
-        if j:
-            left_sibling = parent.children[parent_index - 1]  
-            x.keys.insert(0, parent.keys.pop(parent_index - 1))   # 부모의 key를 노드의 앞에 넣기(insert, 뒤로 밀림)
-            parent.keys[parent_index - 1] = left_sibling.keys.pop(-1)   # 왼쪽 sibling의 마지막 key를 부모로 올리기
-            x.pop(i - 1)   # key 삭제
+        if is_left:
+            left_sibling = parent.children[parent_index - 1]
+            x.keys.pop(i)   # key 제거
+            x.keys.insert(0, parent.keys[parent_index - 1])  # 부모의 키를 노드의 앞에 삽입
+            parent.keys[parent_index - 1] = left_sibling.keys.pop()  # 왼쪽 형제의 마지막 키를 부모로 이동
 
         ## 오른쪽 sibling이 존재하고, 오른쪽 sibling이 key가 t개 이상일 때
         else:
             right_sibling = parent.children[parent_index + 1]
-            x.keys.append(parent.keys.pop(parent_index))   # 부모의 key를 노드의 뒤에 넣기(append)
-            parent.keys[parent_index] = right_sibling.keys.pop(0)   # 오른쪽 sibling의 첫번째 key를 부모로 올리기
-            x.pop(i)   # key 삭제
-        
+            x.keys.pop(i)   # key 제거
+            x.keys.append(parent.keys[parent_index])  # 부모의 키를 노드의 뒤에 추가
+            parent.keys[parent_index] = right_sibling.keys.pop(0)  # 오른쪽 형제의 첫 번째 키를 부모로 이동
 
 
     # for printing the statistic of the resulting B-tree
@@ -351,7 +392,7 @@ def insertion_test(B, file):
     return B
 
 
-def deletion_test(B, root, delete_file):
+def deletion_test(B, delete_file):
     '''
     #   read all keys and values from the file and delete them from the B-tree
     #   B   : the current B-tree
@@ -422,7 +463,7 @@ def main():
             # 4. End program
             elif num == 4:
                 sys.exit(1)
-
+                
             else:
                 print("Invalid input. Please enter 1, 2, 3, or 4.")
 
